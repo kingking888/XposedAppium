@@ -1,5 +1,6 @@
 package com.zhenxi.Superappium;
 
+import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.app.Application;
 import android.app.Dialog;
@@ -12,8 +13,11 @@ import android.view.View;
 import android.view.Window;
 import android.widget.PopupWindow;
 
-
-import com.zhenxi.Superappium.utils.HiddenAPIEnforcementPolicyUtils;
+import com.zhenxi.Superappium.utils.CLogUtils;
+import com.zhenxi.Superappium.utils.ThreadUtils;
+import com.zhenxi.Superappium.xpcompat.CompatHelpers;
+import com.zhenxi.Superappium.xpcompat.CompatMethodHook;
+import com.zhenxi.Superappium.xpcompat.XpCompatEngine;
 
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
@@ -24,58 +28,73 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArraySet;
 
-import de.robv.android.xposed.XC_MethodHook;
-import de.robv.android.xposed.XposedBridge;
-import de.robv.android.xposed.XposedHelpers;
-
 
 public class PageManager {
 
     static {
-        //åºŸæ‰9.0+ Hide Apiæ£€æµ‹
-        HiddenAPIEnforcementPolicyUtils.passApiCheck();
+        //·Ïµô9.0+ Hide Api¼ì²â
 
-        init();
-        // æ¿€æ´»é¡µé¢ç›‘æ§
+        // ²»ÄÜÖ±½Ó·Ïµô£¬²¿·Öapp´æÔÚ¶ÔÕâ¸öflagµÄ¼ì²â£¬Èç¹ûÄãµÄ·´Éä±»×è¶Ï£¬ÇëÊ¹ÓÃ { @link com.zhenxi.Superappium.xpcompat.FreeReflection}
+        // com.zhenxi.Superappium.xpcompat.CompatHelpers ÖĞÄ¬ÈÏÊ¹ÓÃ FreeReflection½øĞĞ·´Éä²Ù×÷
+        // HiddenAPIEnforcementPolicyUtils.passApiCheck();
+
+        //init();
+        // ¼¤»îÒ³Ãæ¼à¿Ø
         enablePageMonitor();
     }
-    private static Context mContext= null;
 
-    private static ClassLoader mClassLoader= null;
 
-    private static HashMap<String, ActivityFocusHandler> activityFocusHandlerMap = new HashMap<>();
+    @SuppressLint("StaticFieldLeak")
+    private static Context mContext = null;
 
-    private static HashMap<String, FragmentFocusHandler> fragmentFocusHandlerHashMap = new HashMap<>();
+    private static ClassLoader mClassLoader = null;
 
-    private static Handler mainLooperHandler = new Handler(Looper.getMainLooper());
-
+    @SuppressLint("StaticFieldLeak")
     private static Activity topActivity = null;
 
-    private static Map<String, Object> topFragmentMaps = new ConcurrentHashMap<>();
 
+    private static final HashMap<String, ActivityFocusHandler> activityFocusHandlerMap = new HashMap<>();
+
+    private static final HashMap<String, FragmentFocusHandler> fragmentFocusHandlerHashMap = new HashMap<>();
+
+    //private static Set<WeakReference<LocalActivityManager>> localActivityManagers = new CopyOnWriteArraySet<>();
+
+    private static final Set<WeakReference<Window>> dialogWindowsSets = new CopyOnWriteArraySet<>();
+
+    private static final Set<WeakReference<PopupWindow>> popupWindowSets = new CopyOnWriteArraySet<>();
+
+    private static final Map<String, Object> topFragmentMaps = new ConcurrentHashMap<>();
+
+    public static final Handler handler = new Handler(Looper.getMainLooper());
 
     /**
-     * è¿”å›å½“å‰è¿›ç¨‹çš„Context
+     * ·µ»Øµ±Ç°½ø³ÌµÄContext
      */
-    public static Context getContext(){
+    public static Context getContext() {
         return mContext;
     }
-    public static ClassLoader getClassloader(){
+
+    public static ClassLoader getClassloader() {
         return mClassLoader;
     }
+
     /**
-     * ä¸»è¦æ˜¯ä¸ºäº†æ‹¿åˆ°å¯¹æ–¹è¿›ç¨‹çš„classloader æ–¹ä¾¿åç»­
+     * Ö÷ÒªÊÇÎªÁËÄÃµ½¶Ô·½½ø³ÌµÄclassloader ·½±ãºóĞø
+     *
+     * @deprecated ¹ıÆÚ£¬´Ë·½·¨¼æÈİĞÔÓĞÎÊÌâ¡£¶¨ÖÆ»¯¿ò¼ÜÏÂ£¬hook¿ò¼ÜÈë¿Úµã¿ÉÄÜÔÚattachÖ®ºó¡£´ËÊ±À¹½Ø²»µ½´ËÁ÷³Ì¡£<br>ÎÒÃÇÔÚdispatchActivityResumedµÄÊ±ºòÖ±½ÓÀ¹½ØÒ²¿ÉÒÔÄÃµ½ÕâÁ½¸ö×Ö¶Î
      */
     private static void init() {
         try {
-            XposedHelpers.findAndHookMethod(Application.class, "attach", Context.class, new XC_MethodHook() {
-                @Override
-                protected void afterHookedMethod(MethodHookParam param) throws Throwable {
-                    super.afterHookedMethod(param);
-                    mContext= (Context) param.args[0];
-                    mClassLoader = ((Context) param.args[0]).getClassLoader();
-                }
-            });
+            CompatHelpers.findAndHookMethod(Application.class, "attach",
+                    Context.class,
+                    new CompatMethodHook() {
+                        @Override
+                        public void afterHookedMethod(MethodHookParam param) throws Throwable {
+                            super.afterHookedMethod(param);
+                            mContext = (Context) param.args[0];
+                            mClassLoader = ((Context) param.args[0]).getClassLoader();
+                        }
+                    });
         } catch (Exception e) {
             Log.i(SuperAppium.TAG, "Hook Application->attach error " + e.getMessage());
             e.printStackTrace();
@@ -97,11 +116,8 @@ public class PageManager {
     }
 
 
-
-
-
     /**
-     * ä»»åŠ¡é—´éš”
+     * ÈÎÎñ¼ä¸ô
      */
     private static int taskDuration = 200;
 
@@ -109,33 +125,25 @@ public class PageManager {
 
     private static boolean disable = false;
 
-    //private static Set<WeakReference<LocalActivityManager>> localActivityManagers = new CopyOnWriteArraySet<>();
 
-    private static Set<WeakReference<Window>> dialogWindowsSets = new CopyOnWriteArraySet<>();
-
-    private static Set<WeakReference<PopupWindow>> popupWindowSets = new CopyOnWriteArraySet<>();
-
-
-
-    public static Set<WeakReference<Window>>  getWindos(){
-        return dialogWindowsSets ;
+    public static Set<WeakReference<Window>> getWindos() {
+        return dialogWindowsSets;
     }
 
-    public static Set<WeakReference<PopupWindow>>  getPopWindos(){
-        return popupWindowSets ;
+    public static Set<WeakReference<PopupWindow>> getPopWindos() {
+        return popupWindowSets;
     }
-
 
 
     /**
-     * å¯¹è¯æ¡†å¼¹çª—çš„å›è°ƒ
+     * ¶Ô»°¿òµ¯´°µÄ»Øµ÷
      */
     private static AlertDialogShowListener mAfterAlertDialogShowListener = null;
 
     /**
-     * è®¾ç½®ä»»åŠ¡æ—¶é—´é—´éš”ï¼Œè¿™ä¼šå½±å“caseæ‰§è¡Œé€Ÿåº¦
+     * ÉèÖÃÈÎÎñÊ±¼ä¼ä¸ô£¬Õâ»áÓ°ÏìcaseÖ´ĞĞËÙ¶È
      *
-     * @param taskDuration caseé—´éš”æ—¶é—´ï¼Œé»˜è®¤200æ¯«ç§’ï¼Œä¹Ÿå°±æ˜¯0.2ç§’
+     * @param taskDuration case¼ä¸ôÊ±¼ä£¬Ä¬ÈÏ200ºÁÃë£¬Ò²¾ÍÊÇ0.2Ãë
      */
     public static void setTaskDuration(int taskDuration) {
         PageManager.taskDuration = taskDuration;
@@ -146,18 +154,23 @@ public class PageManager {
     }
 
     public static Handler getMainLooperHandler() {
-        return mainLooperHandler;
+        return handler;
     }
 
     /**
-     * è®¾ç½®showæ–¹æ³•çš„å›è°ƒ
+     * ÉèÖÃshow·½·¨µÄ»Øµ÷
      *
-     * @param listener å¯¹åº”çš„Listener
+     * @param listener ¶ÔÓ¦µÄListener
+     * @deprecated
      */
     public static void SetDialogShowListener(AlertDialogShowListener listener) {
         if (listener != null) {
             mAfterAlertDialogShowListener = listener;
         }
+    }
+
+    public static void setDialogShowListener(AlertDialogShowListener listener) {
+        SetDialogShowListener(listener);
     }
 
     public static void addHandler(String activityClassName, ActivityFocusHandler activityFocusHandler) {
@@ -199,7 +212,7 @@ public class PageManager {
                 popupWindowSets.remove(popupWindowWeakReference);
                 continue;
             }
-            View mDecorView = (View) XposedHelpers.getObjectField(popupWindow, "mDecorView");
+            View mDecorView = (View) CompatHelpers.getObjectField(popupWindow, "mDecorView");
             if (mDecorView == null) {
                 continue;
             }
@@ -213,14 +226,14 @@ public class PageManager {
 
 
     /**
-     * æ ¹æ®xpathè¡¨è¾¾å¼
-     * ä»å¯èƒ½å‡ºç°åœ¨æœ€ä¸Šå±‚çš„viewä¸Šè¿›è¡Œéå†æŸ¥æ‰¾
-     * å¯èƒ½å­˜åœ¨æ‚¬æµ®çª—+å’Œå¯¹è¯åŒæ—¶å­˜åœ¨çš„æƒ…å†µï¼Œè¿™æ—¶å€™ä¼šæœ‰å¤šä¸ªWindow
-     *
-     * ä½¿ç”¨è€…ä¸åº”è¯¥å…³æ³¨è¿™äº›ï¼ŒæŠŠå¯èƒ½åœ¨ä¸Šå±‚å‡ºç°çš„å­˜åœ¨çš„æƒ…å†µè¿›è¡Œéå†
+     * ¸ù¾İxpath±í´ïÊ½
+     * ´Ó¿ÉÄÜ³öÏÖÔÚ×îÉÏ²ãµÄviewÉÏ½øĞĞ±éÀú²éÕÒ
+     * ¿ÉÄÜ´æÔÚĞü¸¡´°+ºÍ¶Ô»°Í¬Ê±´æÔÚµÄÇé¿ö£¬ÕâÊ±ºò»áÓĞ¶à¸öWindow
+     * <p>
+     * Ê¹ÓÃÕß²»Ó¦¸Ã¹Ø×¢ÕâĞ©£¬°Ñ¿ÉÄÜÔÚÉÏ²ã³öÏÖµÄ´æÔÚµÄÇé¿ö½øĞĞ±éÀú¡£
      */
     public static ViewImage tryGetTopView(String xpath) {
-        //å°è¯•ä»å¯¹è¯æ¡†é‡Œé¢è·å–
+        //³¢ÊÔ´Ó¶Ô»°¿òÀïÃæ»ñÈ¡
         for (WeakReference<Window> windowWeakReference : PageManager.getWindos()) {
             Window window = windowWeakReference.get();
             if (window == null) {
@@ -238,14 +251,14 @@ public class PageManager {
                 return DialogWindowXpath.get(0);
             }
         }
-        //å°è¯•ä»pupwindowè·å–
-        for (WeakReference<PopupWindow> popupWindowWeakReference :  PageManager.getPopWindos()) {
+        //³¢ÊÔ´Ópupwindow»ñÈ¡
+        for (WeakReference<PopupWindow> popupWindowWeakReference : PageManager.getPopWindos()) {
             PopupWindow popupWindow = popupWindowWeakReference.get();
             if (popupWindow == null) {
                 PageManager.getPopWindos().remove(popupWindowWeakReference);
                 continue;
             }
-            View mDecorView = (View) XposedHelpers.getObjectField(popupWindow, "mDecorView");
+            View mDecorView = (View) CompatHelpers.getObjectField(popupWindow, "mDecorView");
             if (mDecorView == null) {
                 continue;
             }
@@ -260,9 +273,10 @@ public class PageManager {
         return null;
     }
 
+
     /**
-     * è·å–æœ€ä¸Šå±‚çš„å¹¶ä¸”æ˜¾ç¤ºçš„View
-     * æ¯”å¦‚å¯¹è¯æ¡†ï¼Œå¯èƒ½å­˜åœ¨Nullçš„é—®é¢˜
+     * »ñÈ¡×îÉÏ²ãµÄ²¢ÇÒÏÔÊ¾µÄView
+     * ±ÈÈç¶Ô»°¿ò,¿ÉÄÜ´æÔÚNullµÄÎÊÌâ
      */
     public static View getTopRootView() {
         Activity topActivity = PageManager.getTopActivity();
@@ -303,7 +317,7 @@ public class PageManager {
         if (fragmentObject == null) {
             return null;
         }
-        boolean isVisible = (boolean) XposedHelpers.callMethod(fragmentObject, "isVisible");
+        boolean isVisible = (boolean) CompatHelpers.callMethod(fragmentObject, "isVisible");
         if (isVisible) {
             return fragmentObject;
         } else {
@@ -313,14 +327,14 @@ public class PageManager {
     }
 
     /**
-     * Hook å¯èƒ½å‡ºç°åœ¨æœ€ä¸Šå±‚çš„View
+     * Hook ¿ÉÄÜ³öÏÖÔÚ×îÉÏ²ãµÄView
      * <p>
      * Activity,Dialog,PopupWindow
      */
     private static void enablePageMonitor() {
         try {
 //            Xpo
-//            sedHelpers.findAndHookMethod(Activity.class, "onResume", new XC_MethodHook() {
+//            sedHelpers.findAndHookMethod(Activity.class, "onResume", new CompatMethodHook() {
 //                @Override
 //                protected void afterHookedMethod(MethodHookParam param) {
 //
@@ -328,49 +342,62 @@ public class PageManager {
 //
 //                    topActivity = activity;
 //                    Log.i(SuperAppium.TAG, "onWindow resume: " + activity.getClass().getName());
-//                    //æ‰§è¡Œå¯¹åº”çš„ä»»åŠ¡
+//                    //Ö´ĞĞ¶ÔÓ¦µÄÈÎÎñ
 //                    trigger();
 //                }
 //            });
 
-            XposedHelpers.findAndHookMethod(Application.class, "dispatchActivityResumed",
-                    Activity.class, new XC_MethodHook() {
+            CompatHelpers.findAndHookMethod(Application.class, "dispatchActivityResumed",
+                    Activity.class,
+                    new CompatMethodHook() {
                         @Override
-                        protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                        public void beforeHookedMethod(MethodHookParam param) throws Throwable {
                             super.beforeHookedMethod(param);
                             topActivity = (Activity) param.args[0];
-
-                            trigger();
+                            if (mContext == null) {
+                                mContext = topActivity.getApplicationContext();
+                                mClassLoader = topActivity.getClassLoader();
+                            }
+                            triggerActivity();
                         }
                     });
-        } catch (Exception e) {
+        } catch (Throwable e) {
             Log.e(SuperAppium.TAG, "Hook Activity->dispatchActivityResumed error " + e.getMessage());
         }
 
-        Class<?> fragmentClass = null;
+        Class<?> fragmentClass;
         try {
 
-            XC_MethodHook rc_methodHook = new XC_MethodHook() {
+            CompatMethodHook rc_methodHook = new CompatMethodHook() {
                 @Override
-                protected void afterHookedMethod(MethodHookParam param) {
+                public void afterHookedMethod(MethodHookParam param) {
                     Log.i(SuperAppium.TAG, "onFragment resume: " + param.thisObject.getClass().getName());
                     topFragmentMaps.put(param.thisObject.getClass().getName(), param.thisObject);
+
+                    triggerFragment();
                 }
             };
-            //å°è¯•Hook
-            XposedHelpers.findAndHookMethod(Fragment.class, "onResume", rc_methodHook);
+            //³¢ÊÔHook
+            CompatHelpers.findAndHookMethod(Fragment.class, "onResume", rc_methodHook);
 
             fragmentClass = mClassLoader.loadClass("android.support.v4.app.Fragment");
 
             if (fragmentClass != null) {
-                XposedHelpers.findAndHookMethod(fragmentClass, "onResume", rc_methodHook);
+                CompatHelpers.findAndHookMethod(fragmentClass, "onResume", rc_methodHook);
             }
+
+            Class<?> AndroidXFragmentClass = mClassLoader.loadClass("androidx.fragment.app.Fragment");
+
+            if (AndroidXFragmentClass != null) {
+                CompatHelpers.findAndHookMethod(AndroidXFragmentClass, "onResume", rc_methodHook);
+            }
+
         } catch (Throwable e) {
             //ignore
         }
 
         //android.app.LocalActivityManager.LocalActivityManager
-//        XposedHelpers.findAndHookConstructor(LocalActivityManager.class, Activity.class, boolean.class, new RC_MethodHook() {
+//        CompatHelpers.findAndHookConstructor(LocalActivityManager.class, Activity.class, boolean.class, new RC_MethodHook() {
 //            @Override
 //            protected void afterHookedMethod(MethodHookParam param) throws Throwable {
 //                localActivityManagers.add(new WeakReference<>((LocalActivityManager) param.thisObject));
@@ -378,12 +405,12 @@ public class PageManager {
 //        });
 
 
-        //å¼¹çª—ä¸è¢« activityç®¡ç†
+        //µ¯´°²»±» activity¹ÜÀí
         try {
-            XposedBridge.hookAllConstructors(Dialog.class, new XC_MethodHook() {
+            XpCompatEngine.hookAllConstructors(Dialog.class, new CompatMethodHook() {
                 @Override
-                protected void afterHookedMethod(MethodHookParam param) throws Throwable {
-                    Window mWindow = (Window) XposedHelpers.getObjectField(param.thisObject, "mWindow");
+                public void afterHookedMethod(MethodHookParam param) {
+                    Window mWindow = (Window) CompatHelpers.getObjectField(param.thisObject, "mWindow");
                     if (mWindow == null) {
                         Log.w(SuperAppium.TAG, "can not get windows object for dialog: " + param.thisObject.getClass().getName());
                         return;
@@ -395,14 +422,13 @@ public class PageManager {
 
         } catch (Exception e) {
             Log.i(SuperAppium.TAG, "Hook  Dialog error  : " + e.getMessage());
-
             e.printStackTrace();
         }
 
         try {
-            XposedHelpers.findAndHookMethod(Dialog.class, "show", new XC_MethodHook() {
+            CompatHelpers.findAndHookMethod(Dialog.class, "show", new CompatMethodHook() {
                 @Override
-                protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+                public void afterHookedMethod(MethodHookParam param) {
                     if (mAfterAlertDialogShowListener != null) {
                         Dialog DialogObject = (Dialog) param.thisObject;
                         mAfterAlertDialogShowListener.DialogShow(DialogObject);
@@ -414,41 +440,48 @@ public class PageManager {
             e.printStackTrace();
         }
 
-        //popupWindowä¸è¢«activityç®¡ç†
+        //popupWindow²»±»activity¹ÜÀí
         try {
-            XposedHelpers.findAndHookConstructor(PopupWindow.class, View.class, int.class, int.class, boolean.class, new XC_MethodHook() {
+            CompatHelpers.findAndHookConstructor(PopupWindow.class, View.class, int.class, int.class, boolean.class, new CompatMethodHook() {
                 @Override
-                protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+                public void afterHookedMethod(MethodHookParam param) {
                     Log.i(SuperAppium.TAG, "create PopupWindow: " + param.thisObject.getClass().getName());
                     popupWindowSets.add(new WeakReference<>((PopupWindow) param.thisObject));
                 }
             });
-        } catch (Exception e) {
+        } catch (Throwable e) {
             e.printStackTrace();
         }
-
+        //Log.i(SuperAppium.TAG, "PageManager init end");
     }
 
 
-    public static void trigger() {
+    public static void triggerActivity() {
 
         final Activity activity = topActivity;
         if (activity == null) {
             Log.i(SuperAppium.TAG, "no top activity found");
             return;
         }
-        //
-        final ActivityFocusHandler iActivityHandler = activityFocusHandlerMap.get(activity.getClass().getName());
+
+        final ActivityFocusHandler iActivityHandler =
+                activityFocusHandlerMap.get(activity.getClass().getName());
         if (iActivityHandler != null) {
-            //é˜²æ­¢åˆ«çš„é¡µé¢å¹²æ‰°Flag
+            //·ÀÖ¹±ğµÄÒ³Ãæ¸ÉÈÅFlag
             if (hasPendingActivityTask) {
                 return;
             }
             hasPendingActivityTask = true;
-            //ç¬¬ä¸€æ¬¡å¯åŠ¨Countä¸º0
+            //µÚÒ»´ÎÆô¶¯CountÎª0
             triggerActivityActive(activity, iActivityHandler, 0);
+        } else {
+            Log.i(SuperAppium.TAG, "triggerActivity not found activity handler " + activity.getClass().getName());
         }
 
+    }
+
+
+    public static void triggerFragment() {
         for (String theFragmentClassName : topFragmentMaps.keySet()) {
             Object topFragment = getTopFragment(theFragmentClassName);
             if (topFragment == null) {
@@ -458,24 +491,26 @@ public class PageManager {
             if (fragmentFocusHandler == null) {
                 continue;
             }
-            triggerFragmentActive(activity, topFragment, fragmentFocusHandler, 0);
+            triggerFragmentActive(getTopActivity(), topFragment, fragmentFocusHandler, 0);
         }
     }
 
-
+    @SuppressWarnings("all")
     private static void triggerFragmentActive(final Activity activity, final Object fragment, final FragmentFocusHandler fragmentFocusHandler, final int triggerCount) {
         if (disable) {
             Log.i(SuperAppium.TAG, "Page Trigger manager disabled");
             return;
         }
-        mainLooperHandler.postDelayed(new Runnable() {
+        //¿¼ÂÇµ½ËŞÖ÷App¿ÉÄÜ²»Ö§³Ö1.8Óï·¨ËùÒÔ²»Ê¹ÓÃ±í´ïÊ½
+        handler.postDelayed(new Runnable() {
             @Override
             public void run() {
                 if (!activity.hasWindowFocus()) {
+                    Log.i(SuperAppium.TAG, activity.getClass().getName() + "Fragment hasWindowFocus false ");
                     return;
                 }
                 try {
-                    if (fragmentFocusHandler.handleFragmentPage(fragment, activity, new ViewImage((View) XposedHelpers.callMethod(fragment, "getView")))) {
+                    if (fragmentFocusHandler.handleFragmentPage(fragment, activity, new ViewImage((View) CompatHelpers.callMethod(fragment, "getView")))) {
                         return;
                     }
                 } catch (Throwable throwable) {
@@ -488,26 +523,31 @@ public class PageManager {
                 triggerFragmentActive(activity, fragment, fragmentFocusHandler, triggerCount + 1);
             }
         }, taskDuration);
+
     }
 
-    private static void triggerActivityActive(final Activity activity, final ActivityFocusHandler activityFocusHandler, final int triggerCount) {
+    @SuppressWarnings("all")
+    private static void triggerActivityActive(final Activity activity,
+                                              final ActivityFocusHandler activityFocusHandler,
+                                              final int triggerCount) {
         if (disable) {
             Log.i(SuperAppium.TAG, "Page Trigger manager disabled");
             return;
         }
-        mainLooperHandler.postDelayed(new Runnable() {
+        //¿¼ÂÇµ½ËŞÖ÷App¿ÉÄÜ²»Ö§³Ö1.8Óï·¨ËùÒÔ²»Ê¹ÓÃ±í´ïÊ½
+        handler.postDelayed(new Runnable() {
             @Override
             public void run() {
                 try {
                     Log.i(SuperAppium.TAG, "triggerActivityActive activity: " + activity.getClass().getName() + " for ActivityFocusHandler:" + activityFocusHandler.getClass().getName());
                     hasPendingActivityTask = false;
-                    //è§¦å‘å¯¹åº”çš„äº‹ä»¶trueä¸ºæ¶ˆè´¹äº‹ä»¶ ä¸ç»§ç»­æ‰§è¡Œ  å¦‚æœè¿”å›falseåˆ™å»¶è¿Ÿ200æ¯«ç§’ç»§ç»­æ‰§è¡Œ
                     if (activityFocusHandler.handleActivity(activity, new ViewImage(activity.getWindow().getDecorView()))) {
                         return;
                     }
                 } catch (Throwable throwable) {
                     Log.e(SuperAppium.TAG, "error to handle activity:" + activity.getClass().getName(), throwable);
                 }
+
                 if (triggerCount > 10) {
                     Log.w(SuperAppium.TAG, "the activity event trigger failed too many times: " + activityFocusHandler.getClass());
                     return;

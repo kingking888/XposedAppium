@@ -15,6 +15,7 @@ import android.widget.TextView;
 import com.zhenxi.Superappium.traversor.Collector;
 import com.zhenxi.Superappium.traversor.Evaluator;
 import com.zhenxi.Superappium.traversor.SuperAppiumDumper;
+import com.zhenxi.Superappium.utils.ThreadUtils;
 import com.zhenxi.Superappium.xmodel.LazyValueGetter;
 import com.zhenxi.Superappium.xmodel.ValueGetters;
 import com.zhenxi.Superappium.xpath.XpathParser;
@@ -29,6 +30,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.concurrent.ThreadLocalRandom;
 
 
@@ -91,7 +93,24 @@ public class ViewImage {
         }
         return (T) valueGetter.get();
     }
+    private int[] location = null;
 
+    public int[] locationOnScreen() {
+        if (location != null) {
+            return location;
+        }
+        location = new int[2];
+        originView.getLocationOnScreen(location);
+        return location;
+    }
+
+    public int X() {
+        return locationOnScreen()[0];
+    }
+
+    public int Y() {
+        return locationOnScreen()[1];
+    }
 
     public View getOriginView() {
         return originView;
@@ -159,7 +178,7 @@ public class ViewImage {
     }
 
     /**
-     * @return è·å–å…¨éƒ¨çš„å­èŠ‚ç‚¹ï¼ŒåŒ…æ‹¬çˆ¶ç±»ï¼Œå­ç±»
+     * @return »ñÈ¡È«²¿µÄ×Ó½Úµã£¬°üÀ¨¸¸Àà£¬×ÓÀà
      */
     public ViewImages getAllElements() {
         if (allElementsCache == null) {
@@ -204,6 +223,10 @@ public class ViewImage {
         return parent.childAt(nextSiblingIndex);
     }
 
+    /**
+     * »ñÈ¡È«²¿µÄÏàÁÚµÄView
+     * (ĞÖµÜ½Úµã)
+     */
     public ViewImages siblings() {
         if (parent == null) {
             return new ViewImages();
@@ -221,7 +244,7 @@ public class ViewImage {
     }
 
     /**
-     * @return æ‰“å°å½“å‰viewçš„å…¨éƒ¨å±æ€§
+     * @return ´òÓ¡µ±Ç°viewµÄÈ«²¿ÊôĞÔ
      */
     public String attributes() {
         JSONObject jsonObject = new JSONObject();
@@ -244,9 +267,9 @@ public class ViewImage {
     }
 
     /**
-     * æŸ¥æ‰¾å…¨éƒ¨åŒ¹é…é¡¹
+     * ²éÕÒÈ«²¿Æ¥ÅäÏî
      *
-     * @param xpath xpathè¡¨è¾¾å¼
+     * @param xpath xpath±í´ïÊ½
      */
     public ViewImages xpath(String xpath) {
         return XpathParser.compileNoError(xpath).evaluateToElement(new XNodes(XNode.e(this)));
@@ -255,25 +278,33 @@ public class ViewImage {
     /**
      * "//android.widget.TextView[@contentDescription='XXXXXXXXXXXXXXXX']/text()"
      *
-     * @param xpath xpathè¡¨è¾¾å¼
-     * @return æ‹¿åˆ°å¯¹åº”Viewé‡Œé¢çš„å…·ä½“å†…å®¹
+     * @param xpath xpath±í´ïÊ½
+     * @return ÄÃµ½¶ÔÓ¦ViewÀïÃæµÄ¾ßÌåÄÚÈİ
      */
     public String xpath2String(String xpath) {
         return XpathParser.compileNoError(xpath).evaluateToSingleString(new XNodes(XNode.e(this)));
     }
 
     /**
-     * æ ¹æ®xpathè¡¨è¾¾å¼æ‹¿åˆ°å¯¹åº”çš„ ViewImage
+     * ¸ù¾İxpath±í´ïÊ½ÄÃµ½¶ÔÓ¦µÄ ViewImage
      * "//android.widget.TextView[@id='XXXXXXXXXXXXXX']"
      */
     public ViewImage xpath2One(String xpath) {
         ViewImages viewImages = xpath(xpath);
         if (viewImages.size() == 0) {
+            //Èç¹ûÒ³ÃæÉÏÃ»ÕÒµ½,¿ªÊ¼²éÕÒ¶Ô»°¿ò
             return PageManager.tryGetTopView(xpath);
         }
         return viewImages.get(0);
     }
 
+    /**
+     * ³¢ÊÔ¶ÔListItem ½øĞĞµã»÷
+     *
+     * @param parent
+     * @param mView
+     * @return
+     */
     private boolean clickAdapterView(AdapterView parent, View mView) {
 
         final int position = parent.getPositionForView(mView);
@@ -295,10 +326,10 @@ public class ViewImage {
     }
 
     /**
-     * æŸ¥æ‰¾åˆ°å¹¶ç‚¹å‡»
+     * ²éÕÒµ½²¢µã»÷
      *
-     * @param xpath xpathè¡¨è¾¾å¼
-     * @return æ˜¯å¦ç‚¹å‡»æˆåŠŸ
+     * @param xpath xpath±í´ïÊ½
+     * @return ÊÇ·ñµã»÷³É¹¦
      */
     public boolean clickByXpath(String xpath) {
 
@@ -316,11 +347,11 @@ public class ViewImage {
 
 
     /**
-     * å¯¹ TextView ç±»å‹ è®¾ç½®æŒ‡å®šå†…å®¹
+     * ¶Ô TextView ÀàĞÍ ÉèÖÃÖ¸¶¨ÄÚÈİ
      *
-     * @param xpathExpression xpathè¡¨è¾¾å¼
-     * @param content         å…·ä½“å†…å®¹
-     * @return æ˜¯å¦è®¾ç½®æˆåŠŸ
+     * @param xpathExpression xpath±í´ïÊ½
+     * @param content         ¾ßÌåÄÚÈİ
+     * @return ÊÇ·ñÉèÖÃ³É¹¦
      */
     public boolean typeByXpath(String xpathExpression, String content) {
         ViewImages viewImages = xpath(xpathExpression);
@@ -338,30 +369,30 @@ public class ViewImage {
 
 
     /**
-     * ç‚¹å‡»å½“å‰View
+     * µã»÷µ±Ç°View
      */
     public boolean click() {
-        if (originView.isClickable()) {
-            if (originView.performClick()) {
-                return true;
-            }
-            if (originView.callOnClick()) {
-                return true;
-            }
-        }
-        //å†æ¬¡å°è£…ï¼Œä¸»è¦é’ˆå¯¹ListViewè¿™ç§ç‰¹æ®Šæ¡ç›®View
-        ViewImage parentViewImage = parentNode();
-        if (parentViewImage != null) {
-            View parentOriginView = parentViewImage.getOriginView();
-            if (parentOriginView instanceof AdapterView) {
-                if (!originView.performClick()) {
-                    if (clickAdapterView((AdapterView) parentOriginView, originView)) {
-                        return true;
+
+        if(!clickV2()) {
+            //¿ªÊ¼³¢ÊÔ¶ÔListItem½øĞĞµã»÷,ListItemĞèÒªListÊÂ¼ş·Ö·¢(onItemClick)²Å»áÉúĞ§
+            ViewImage parentViewImage = parentNode();
+            if (parentViewImage != null) {
+                View parentOriginView = parentViewImage.getOriginView();
+                if (parentOriginView instanceof AdapterView) {
+                    if (!originView.performClick()) {
+                        return clickAdapterView((AdapterView) parentOriginView, originView);
                     }
                 }
             }
         }
-        return clickV2();
+
+        if (originView.isClickable()) {
+            if (originView.performClick()) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
 
@@ -374,7 +405,7 @@ public class ViewImage {
         final float locationOnRootViewY = y - loca[1];
 
         if (locationOnRootViewX < 0 || locationOnRootViewY < 0) {
-            //ç‚¹å‡»åˆ°å±å¹•å¤–é¢äº†
+            //µã»÷µ½ÆÁÄ»ÍâÃæÁË
             return false;
         }
         if (locationOnRootViewX > rootView.getWidth() || locationOnRootViewY > rootView.getHeight()) {
@@ -382,14 +413,16 @@ public class ViewImage {
         }
 
 
-        if (!dispatchInputEvent(genMotionEvent(MotionEvent.ACTION_DOWN, new float[]{locationOnRootViewX, locationOnRootViewY}))) {
+        if (!dispatchInputEvent(genMotionEvent(MotionEvent.ACTION_DOWN,
+                new float[]{locationOnRootViewX, locationOnRootViewY}))) {
             return false;
         }
 
         new Handler(Looper.getMainLooper()).postDelayed(new Runnable() {
             @Override
             public void run() {
-                dispatchInputEvent(genMotionEvent(MotionEvent.ACTION_UP, new float[]{locationOnRootViewX, locationOnRootViewY}));
+                dispatchInputEvent(genMotionEvent(MotionEvent.ACTION_UP,
+                        new float[]{locationOnRootViewX, locationOnRootViewY}));
             }
         }, ThreadLocalRandom.current().nextInt(25) + 10);
         return true;
@@ -414,12 +447,20 @@ public class ViewImage {
         return clickByPoint(floats[0], floats[1]);
     }
 
+    private static Random random = new Random();
+
     private float[] measureClickPoint() {
         int[] locs = new int[2];
         originView.getLocationOnScreen(locs);
-        //ä¸­å¿ƒç‚¹
-        float x = locs[0] + originView.getWidth() / 2;
-        float y = locs[1] + originView.getHeight() / 2;
+        float x = locs[0];//+ ((float) originView.getWidth() / 4) + random.nextInt(originView.getWidth() / 4);
+        float y = locs[1];//+ ((float) originView.getHeight() / 4) + random.nextInt(originView.getHeight() / 4);
+
+        if (originView.getWidth() > 5) {
+            x += ((float) originView.getWidth() / 4) + random.nextInt(originView.getWidth() / 4);
+        }
+        if (originView.getHeight() > 5) {
+            y += ((float) originView.getHeight() / 4) + random.nextInt(originView.getHeight() / 4);
+        }
 
         float[] ret = new float[2];
         ret[0] = x;
@@ -440,13 +481,67 @@ public class ViewImage {
         int viewHeight = originView.getHeight();
 
         int fromX = (int) (locs[0] + viewWidth * (ThreadLocalRandom.current().nextDouble(0.4) - 0.2));
+        if (fromX < 2) {
+            fromX = 2;
+        }
         int toX = (int) (fromX + viewWidth * (ThreadLocalRandom.current().nextDouble(0.1)));
 
 
-        int fromY = (int) (locs[1] + viewHeight * ThreadLocalRandom.current().nextDouble(0.1));
-        int toY = fromY + height;
-        SwipeUtils.simulateScroll(this, fromX, fromY, toX, toY);
+        int fromY, toY;
+        if (height > 0) {
+            fromY = (int) (locs[1] + viewHeight * ThreadLocalRandom.current().nextDouble(0.1));
+            if (fromY < 2) {
+                fromY = 2;
+            }
+            toY = fromY + height;
+        } else {
+            fromY = (int) (locs[1] + viewHeight * (ThreadLocalRandom.current().nextDouble(0.1) + 0.9));
+            toY = fromY + height;
+            if (toY < 2) {
+                toY = 2;
+            }
+        }
+        SwipeUtils.simulateScroll(this, fromX, fromY, toX, toY, 400, 50);
 
+    }
+
+    /**
+     * ÏòÓÒ»¬¶¯
+     *
+     * @param width »¬¶¯¿í¶È£¬Èç¹ûÎª¸ºÊı£¬ÔòÏò×ó»¬¶¯
+     */
+    @SuppressLint("NewApi")
+    public void swipeRight(int width) {
+        int[] locs = new int[2];
+        originView.getLocationOnScreen(locs);
+
+        int viewWidth = originView.getWidth();
+        int viewHeight = originView.getHeight();
+
+        int fromY = (int) (locs[1] + viewHeight * (ThreadLocalRandom.current().nextDouble(0.05) - 0.025 + 0.5));
+        if (fromY < 2) {
+            fromY = 2;
+        }
+        int toY = (int) (fromY + viewHeight * (ThreadLocalRandom.current().nextDouble(0.008)));
+
+        int fromX, toX;
+
+        if (width > 0) {
+            fromX = (int) (locs[0] + viewWidth * ThreadLocalRandom.current().nextDouble(0.1));
+            if (fromX < 2) {
+                fromX = 2;
+            }
+            toX = fromX + width;
+        } else {
+            fromX = (int) (locs[0] + viewWidth * (ThreadLocalRandom.current().nextDouble(0.1) + 0.9));
+            toX = fromX + width;
+            if (toX < 2) {
+                toX = 2;
+            }
+        }
+//        Log.i(SuperAppium.TAG, "location on screen: (" + locs[0] + "," + locs[1] + ")  from loc:("
+//                + fromX + "," + fromY + ") to loc:(" + toX + "," + toY + ") with and height: (" + viewWidth + "," + viewHeight + ")");
+        SwipeUtils.simulateScroll(this, fromX, fromY, toX, toY, 300, 50);
     }
 
     private MotionEvent genMotionEvent(int action, float[] point) {
@@ -458,20 +553,23 @@ public class ViewImage {
         pointerCoords.y = point[1];
         MotionEvent.PointerProperties pointerProperties = new MotionEvent.PointerProperties();
         pointerProperties.id = 0;
-        //è®¾ç½®æ»‘åŠ¨ç±»å‹é˜²æ­¢éƒ¨åˆ†App å¯¹æ»‘åŠ¨ç±»å‹è¿›è¡Œæ£€æµ‹ï¼Œå½±å“ç‚¹å‡»
+        //ÉèÖÃ»¬¶¯ÀàĞÍ·ÀÖ¹²¿·ÖApp ¶Ô»¬¶¯ÀàĞÍ½øĞĞ¼ì²â£¬Ó°Ïìµã»÷
         pointerProperties.toolType = TOOL_TYPE_FINGER;
         MotionEvent.PointerProperties[] pointerPropertiesArray = new MotionEvent.PointerProperties[]{pointerProperties};
         MotionEvent.PointerCoords[] pointerCoordsArray = new MotionEvent.PointerCoords[]{pointerCoords};
+
         return MotionEvent.obtain(
                 downTime, eventTime, action,
                 1, pointerPropertiesArray, pointerCoordsArray,
-                0, 0, 0, 0, 8, 0, 4098, 0
+                0, 0, 0, 0,
+                8, 0,
+                4098, 0
         );
     }
 
 
     /**
-     * åˆ¤æ–­å½“å‰Viewæ˜¯å¦æ˜¯WebView
+     * ÅĞ¶Ïµ±Ç°ViewÊÇ·ñÊÇWebView
      */
     public WebView findWebViewIfExist() {
         ViewImages webViews = Collector.collect(new Evaluator() {
@@ -494,7 +592,7 @@ public class ViewImage {
 
 
     /**
-     * æ‰“å°å½“å‰viewåŒ…æ‹¬å­viewçš„å…¨éƒ¨å±æ€§
+     * ´òÓ¡µ±Ç°view°üÀ¨×ÓviewµÄÈ«²¿ÊôĞÔ
      */
     @Override
     public String toString() {
